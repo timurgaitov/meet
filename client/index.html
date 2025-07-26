@@ -7,7 +7,23 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="videos-container">
+    <div id="name-popup-overlay" style="display: none;">
+        <div id="name-popup" class="form-container">
+            <h2>Enter your name</h2>
+            <input type="text" id="name-input" placeholder="Your Name" required>
+            <button id="join-call-btn">Join</button>
+        </div>
+    </div>
+
+    <div id="room-selection-wrapper" style="display: none;">
+        <div id="room-selection" class="form-container">
+            <h1>Meet</h1>
+            <button id="createBtn">New meeting</button>
+        </div>
+    </div>
+
+
+    <div id="videos-container" style="display: none;">
         <div id="videos">
             <div class="video-wrapper">
                 <video id="localVideo" autoplay muted></video>
@@ -20,6 +36,7 @@
         </div>
     </div>
 
+    <script src="uuid.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>
 </body>

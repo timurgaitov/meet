@@ -15,13 +15,13 @@ io.on('connection', (socket) => {
   const clientId = socket.id;
   console.log('user connected', clientId);
 
-  socket.on('join', (roomId) => {
+  socket.on('join', (roomId, name) => {
     socket.join(roomId);
 
-    socket.to(roomId).emit('peer-connected', clientId);
+    socket.to(roomId).emit('peer-connected', clientId, name);
 
-    socket.on('offer', (offer, targetUserId) => {
-      socket.to(targetUserId).emit('offer', offer, clientId);
+    socket.on('offer', (offer, targetUserId, name) => {
+      socket.to(targetUserId).emit('offer', offer, clientId, name);
     });
 
     socket.on('answer', (answer, targetUserId) => {
