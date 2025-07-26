@@ -1,58 +1,88 @@
 const socket = io('/');
 
+(async function() {
+
 const roomId = 1;
 const peers = {};
-let localMedia = new MediaStream([]);
+const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+const tracks = mediaStream.getTracks();
+for (const track of tracks) {
+    track.enabled = false;
+};
 
+const toggleAudioButton = document.getElementById('toggleAudioButton');
+toggleAudioButton.addEventListener('click', toggleAudio);
 const toggleVideoButton = document.getElementById('toggleVideoButton');
 toggleVideoButton.addEventListener('click', toggleVideo);
 const videoGrid = document.getElementById('videos');
 const localVideo = document.getElementById('localVideo');
+localVideo.srcObject = mediaStream;
+let audioEnabled = false;
+let videoEnabled = false;
 
-join();
+await main();
+
+function toggleAudio() {
+    if (audioEnabled) {
+        stopAudio();
+    } else {
+        startAudio();
+    }
+}
 
 function toggleVideo() {
-    if (localMedia.getVideoTracks().length > 0) {
+    if (videoEnabled) {
         stopVideo();
     } else {
         startVideo();
     }
 }
 
+async function startAudio() {
+    if (!mediaStream) return;
+
+    mediaStream.getAudioTracks().forEach(track => {
+        track.enabled = true;
+    });
+
+    toggleAudioButton.textContent = 'Mute';
+    audioEnabled = true;
+}
+
+function stopAudio() {
+    if (!mediaStream) return;
+
+    mediaStream.getAudioTracks().forEach(track => {
+        track.enabled = false;
+    });
+
+    toggleAudioButton.textContent = 'Unmute';
+    audioEnabled = false;
+}
+
 async function startVideo() {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        const track = stream.getVideoTracks()[0];
-        console.log(`track label ${track.label}`);
+    if (!mediaStream) return;
 
-        localMedia.addTrack(track);
+    mediaStream.getVideoTracks().forEach(track => {
+        track.enabled = true;
+    });
 
-        Object.values(peers).forEach(peer => {
-            peer.addTrack(track, localMedia);
-        });
-
-        localVideo.srcObject = localMedia;
-        toggleVideoButton.textContent = 'Turn camera off';
-    } catch (error) {
-        console.error("Error starting video.", error);
-    }
+    toggleVideoButton.textContent = 'Turn camera off';
+    videoEnabled = true;
 }
 
 function stopVideo() {
-    if (!localMedia) return;
+    if (!mediaStream) return;
 
-    localMedia.getVideoTracks().forEach(track => {
-        track.stop();
-        localMedia.removeTrack(track);
-        // Object.values(peers).forEach(peer => {
-        //     peer.removeTrack(track, localStream);
-        // });
+    mediaStream.getVideoTracks().forEach(track => {
+        track.enabled = false;
     });
 
     toggleVideoButton.textContent = 'Turn camera on';
+    videoEnabled = false;
 }
 
-function join() {
+async function main() {
     socket.on('peer-connected', async (clientId) => {
         console.log('event peer-connected:', clientId);
 
@@ -76,8 +106,6 @@ function join() {
 
         console.log('emitting answer to', answer, clientId);
         socket.emit('answer', answer, clientId);
-
-        UI_AddPeer(clientId);
     });
 
     socket.on('answer', async (answer, clientId) => {
@@ -85,8 +113,6 @@ function join() {
 
         const peer = peers[clientId];
         await peer.setRemoteDescription(new RTCSessionDescription(answer));
-
-        UI_AddPeer(clientId);
     });
 
     socket.on('ice-candidate', (candidate, clientId) => {
@@ -98,52 +124,10 @@ function join() {
     socket.on('peer-disconnected', clientId => {
         console.log('event peer-disconnected:', clientId);
 
-        if (peers[clientId]) {
-            peers[clientId].close();
-            delete peers[clientId];
-        }
-
-        UI_RemovePeer(clientId);
+        removePeer(clientId);
     });
 
     socket.emit('join', roomId);
-}
-
-function UI_AddPeer(clientId) {
-    if (document.getElementById(clientId)) {
-        console.log(`peer ${clientId} element already added`);
-        return;
-    }
-
-    const wrapper = document.createElement('div');
-    wrapper.id = clientId;
-    wrapper.className = 'video-wrapper';
-    const video = document.createElement('video');
-    wrapper.appendChild(video);
-
-    videoGrid.append(wrapper);
-
-    peers[clientId].ontrack = event => {
-        console.log('event peer ontrack:', event);
-
-        video.srcObject = event.streams[0];
-        video.addEventListener('loadedmetadata', () => {
-            video.play();
-        });
-    };
-}
-
-function UI_RemovePeer(clientId) {
-    if (peers[clientId]) {
-        peers[clientId].ontrack = null;
-    }
-
-    const el = document.getElementById(clientId);
-    if (!el) {
-        console.log(`peer ${clientId} element not found`);
-        return;
-    }
-    el.remove();
 }
 
 function createPeer(clientId) {
@@ -162,6 +146,61 @@ function createPeer(clientId) {
         }
     };
 
+    mediaStream.getTracks().forEach(track => {
+        peer.addTrack(track, mediaStream);
+    });
+
+    const video = addVideoElement(clientId);
+    peer.ontrack = event => {
+        console.log('event peer ontrack:', event);
+
+        video.srcObject = event.streams[0];
+    };
+
     peers[clientId] = peer;
+
     return peer;
 }
+
+function removePeer(clientId) {
+    if (peers[clientId]) {
+        peers[clientId].ontrack = null;
+        peers[clientId].close();
+        delete peers[clientId];
+    }
+    removeVideoElement(clientId);
+}
+
+function addVideoElement(clientId) {
+    if (document.getElementById(clientId)) {
+        console.log(`peer ${clientId} element already added`);
+        return;
+    }
+
+    const video = document.createElement('video');
+    video.autoplay = true;
+    video.playsInline = true;
+    video.addEventListener('loadedmetadata', () => {
+        video.play();
+    });
+
+    const wrapper = document.createElement('div');
+    wrapper.id = clientId;
+    wrapper.className = 'video-wrapper';
+    wrapper.appendChild(video);
+
+    videoGrid.append(wrapper);
+
+    return video;
+}
+
+function removeVideoElement(clientId) {
+    const el = document.getElementById(clientId);
+    if (!el) {
+        console.log(`peer ${clientId} element not found`);
+        return;
+    }
+    el.remove();
+}
+
+})();
