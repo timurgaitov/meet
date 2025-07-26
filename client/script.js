@@ -237,6 +237,8 @@ async function main() {
 
         videoGrid.append(wrapper);
 
+        updateVideoLayout();
+
         return video;
     }
 
@@ -247,7 +249,38 @@ async function main() {
             return;
         }
         el.remove();
+
+        updateVideoLayout();
     }
+
+    function updateVideoLayout() {
+        const participantCount = document.querySelectorAll('.video-wrapper').length;
+        let columns = Math.ceil(Math.sqrt(participantCount));
+        let rows = Math.ceil(participantCount / columns);
+
+        // Optimize for common cases
+        if (participantCount === 2) {
+            columns = 2;
+            rows = 1;
+        } else if (participantCount === 3 || participantCount === 4) {
+            columns = 2;
+            rows = 2;
+        } else if (participantCount > 4 && participantCount <= 6) {
+            columns = 3;
+            rows = 2;
+        } else if (participantCount > 6 && participantCount <= 9) {
+            columns = 3;
+            rows = 3;
+        }
+
+
+        const videoWrappers = document.querySelectorAll('.video-wrapper');
+        videoWrappers.forEach(wrapper => {
+            wrapper.style.width = `calc(${100 / columns}% - 15px)`;
+            wrapper.style.height = `calc(${100 / rows}% - 15px)`;
+        });
+    }
+
 }
 
 main();
