@@ -18,7 +18,8 @@ body {
 #videos-buttons {
     position: absolute;
     bottom: 50px;
-    font-size: 2em;
+    display: flex;
+    gap: 20px;
 }
 
 #videos {
@@ -43,6 +44,21 @@ body {
     /* Dynamic sizing based on participant count will be handled by JS */
 }
 
+.video-wrapper .mic-icon {
+    display: none;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 50%;
+    padding: 8px;
+    z-index: 10;
+}
+
+.video-wrapper.muted .mic-icon {
+    display: block;
+}
+
 video {
     width: 100%;
     height: 100%;
@@ -65,6 +81,43 @@ video {
     width: fit-content;
     white-space: nowrap;
 }
+
+.control-btn {
+    background-color: #3c4043;
+    border: none;
+    color: white;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    transition: border-radius 0.3s, background-color 0.3s;
+}
+
+.control-btn svg {
+    transition: transform 0.3s;
+}
+
+.control-btn.active {
+    background-color: #ea4335;
+    border-radius: 12px;
+}
+
+.control-btn.active svg {
+    transform: scale(1.1);
+}
+
+.control-btn.inactive {
+    background-color: #3c4043;
+}
+
+#leaveBtn {
+    background-color: #ea4335;
+}
+
 
 /* --- Form Styling --- */
 
@@ -129,4 +182,9 @@ video {
     justify-content: center;
     align-items: center;
     z-index: 1000;
+}
+
+
+#name-popup {
+    width: 300px;
 }

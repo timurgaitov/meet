@@ -11,12 +11,22 @@ const io = socketIo(server, {
   }
 });
 
+const rooms = {};
+
 io.on('connection', (socket) => {
   const clientId = socket.id;
   console.log('user connected', clientId);
 
   socket.on('join', (roomId, name) => {
     socket.join(roomId);
+
+    if (!rooms[roomId]) {
+      rooms[roomId] = {};
+    }
+    
+    socket.emit('room-state', rooms[roomId]);
+
+    rooms[roomId][clientId] = { name, audioEnabled: false };
 
     socket.to(roomId).emit('peer-connected', clientId, name);
 
@@ -32,7 +42,20 @@ io.on('connection', (socket) => {
       socket.to(targetUserId).emit('ice-candidate', candidate, clientId);
     });
 
+    socket.on('toggle-audio', (audioEnabled) => {
+      if (rooms[roomId] && rooms[roomId][clientId]) {
+        rooms[roomId][clientId].audioEnabled = audioEnabled;
+      }
+      socket.to(roomId).emit('toggle-audio', clientId, audioEnabled);
+    });
+
     socket.on('disconnect', () => {
+      if (rooms[roomId]) {
+        delete rooms[roomId][clientId];
+        if (Object.keys(rooms[roomId]).length === 0) {
+          delete rooms[roomId];
+        }
+      }
       socket.to(roomId).emit('peer-disconnected', clientId);
     });
   });
