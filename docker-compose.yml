@@ -16,3 +16,12 @@ services:
       - ./client:/usr/share/nginx/html
     depends_on:
       - server
+  stun:
+    image: coturn/coturn
+    ports:
+      - "3478:3478/udp" # STUN port
+      - "3478:3478/tcp"
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+    command:
+      --log-file=stdout

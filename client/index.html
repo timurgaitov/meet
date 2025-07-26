@@ -3,38 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini Meet</title>
+    <title>Meet</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Name Entry Popup -->
-    <div id="name-popup-overlay">
-        <div id="name-popup" class="form-container">
-            <h2>Enter your name</h2>
-            <input type="text" id="name-input" placeholder="Your Name" required>
-            <button id="join-call-btn">Join Call</button>
-        </div>
-    </div>
-
-    <!-- Room Selection (Home Page) -->
-    <div id="room-selection-wrapper">
-        <div id="room-selection" class="form-container">
-            <h1>Gemini Meet</h1>
-            <input type="text" id="roomId" placeholder="Enter Room ID">
-            <button id="joinBtn">Join Room</button>
-            <p>or</p>
-            <button id="createBtn">Create New Room</button>
-        </div>
-    </div>
-
-
-    <!-- Video Call Container -->
-    <div id="videos-container" style="display: none;">
+    <div id="videos-container">
         <div id="videos">
             <div class="video-wrapper">
                 <video id="localVideo" autoplay muted></video>
                 <span class="name-tag"></span>
             </div>
+        </div>
+        <div id="videos-buttons">
+            <button id="toggleAudioButton">Unmute</button>
+            <button id="toggleVideoButton">Turn camera on</button>
         </div>
     </div>
 

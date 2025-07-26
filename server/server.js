@@ -11,44 +11,29 @@ const io = socketIo(server, {
   }
 });
 
-const users = {};
-
 io.on('connection', (socket) => {
-  console.log('a user connected');
+  const clientId = socket.id;
+  console.log('user connected', clientId);
 
-  socket.on('join-room', (roomId, userId, name) => {
-    users[socket.id] = { name };
+  socket.on('join', (roomId) => {
     socket.join(roomId);
-    // Pass the new user's info to existing clients
-    socket.to(roomId).emit('user-connected', userId, name);
 
-    // Pass the existing users' info to the new user
-    const existingUsers = {};
-    const clients = io.sockets.adapter.rooms.get(roomId);
-    if (clients) {
-        for (const clientId of clients) {
-            if (clientId !== socket.id && users[clientId]) {
-                existingUsers[clientId] = users[clientId].name;
-            }
-        }
-    }
-    socket.emit('existing-users', existingUsers);
+    socket.to(roomId).emit('peer-connected', clientId);
 
     socket.on('offer', (offer, targetUserId) => {
-      socket.to(targetUserId).emit('offer', offer, socket.id, users[socket.id].name);
+      socket.to(targetUserId).emit('offer', offer, clientId);
     });
 
     socket.on('answer', (answer, targetUserId) => {
-      socket.to(targetUserId).emit('answer', answer, socket.id);
+      socket.to(targetUserId).emit('answer', answer, clientId);
     });
 
     socket.on('ice-candidate', (candidate, targetUserId) => {
-      socket.to(targetUserId).emit('ice-candidate', candidate, socket.id);
+      socket.to(targetUserId).emit('ice-candidate', candidate, clientId);
     });
 
     socket.on('disconnect', () => {
-      delete users[socket.id];
-      socket.to(roomId).emit('user-disconnected', userId);
+      socket.to(roomId).emit('peer-disconnected', clientId);
     });
   });
 });

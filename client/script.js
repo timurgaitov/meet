@@ -1,205 +1,167 @@
 const socket = io('/');
-const videoGrid = document.getElementById('videos');
-const roomSelectionWrapper = document.getElementById('room-selection-wrapper');
-const videosContainer = document.getElementById('videos-container');
-const joinBtn = document.getElementById('joinBtn');
-const createBtn = document.getElementById('createBtn');
-const roomIdInput = document.getElementById('roomId');
 
-// Popup elements
-const namePopupOverlay = document.getElementById('name-popup-overlay');
-const nameInput = document.getElementById('name-input');
-const joinCallBtn = document.getElementById('join-call-btn');
-
-
+const roomId = 1;
 const peers = {};
-let localStream;
-let myName = '';
+let localMedia = new MediaStream([]);
 
-// --- Room and Name Entry Logic ---
+const toggleVideoButton = document.getElementById('toggleVideoButton');
+toggleVideoButton.addEventListener('click', toggleVideo);
+const videoGrid = document.getElementById('videos');
+const localVideo = document.getElementById('localVideo');
 
-const urlParams = new URLSearchParams(window.location.search);
-const ROOM_ID = urlParams.get('room');
-const savedName = sessionStorage.getItem('userName');
+join();
 
-if (ROOM_ID) {
-    roomSelectionWrapper.style.display = 'none';
-    if (savedName) {
-        // If name is found, skip popup and join call directly
-        myName = savedName;
-        videosContainer.style.display = 'flex';
-        document.querySelector('#localVideo + .name-tag').textContent = myName + " (You)";
-        startCall();
+function toggleVideo() {
+    if (localMedia.getVideoTracks().length > 0) {
+        stopVideo();
     } else {
-        // If no name, show the popup
-        namePopupOverlay.style.display = 'flex';
+        startVideo();
     }
-} else {
-    // Otherwise, show the room selection screen
-    roomSelectionWrapper.style.display = 'flex';
 }
 
-createBtn.addEventListener('click', () => {
-    const newRoomId = Math.random().toString(36).substr(2, 9);
-    window.location.href = `/?room=${newRoomId}`;
-});
+async function startVideo() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const track = stream.getVideoTracks()[0];
+        console.log(`track label ${track.label}`);
 
-joinBtn.addEventListener('click', () => {
-    const roomId = roomIdInput.value;
-    if (roomId) {
-        window.location.href = `/?room=${roomId}`;
-    } else {
-        alert("Please enter a Room ID");
+        localMedia.addTrack(track);
+
+        Object.values(peers).forEach(peer => {
+            peer.addTrack(track, localMedia);
+        });
+
+        localVideo.srcObject = localMedia;
+        toggleVideoButton.textContent = 'Turn camera off';
+    } catch (error) {
+        console.error("Error starting video.", error);
     }
-});
+}
 
-joinCallBtn.addEventListener('click', () => {
-    myName = nameInput.value;
-    if (!myName) {
-        alert("Please enter your name.");
+function stopVideo() {
+    if (!localMedia) return;
+
+    localMedia.getVideoTracks().forEach(track => {
+        track.stop();
+        localMedia.removeTrack(track);
+        // Object.values(peers).forEach(peer => {
+        //     peer.removeTrack(track, localStream);
+        // });
+    });
+
+    toggleVideoButton.textContent = 'Turn camera on';
+}
+
+function join() {
+    socket.on('peer-connected', async (clientId) => {
+        console.log('event peer-connected:', clientId);
+
+        const peer = createPeer(clientId);
+
+        const offer = await peer.createOffer();
+        await peer.setLocalDescription(offer);
+
+        console.log('sending offer to user', clientId);
+        socket.emit('offer', offer, clientId);
+    });
+
+    socket.on('offer', async (offer, clientId) => {
+        console.log('event offer', offer, clientId);
+
+        const peer = createPeer(clientId);
+
+        await peer.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await peer.createAnswer();
+        await peer.setLocalDescription(answer);
+
+        console.log('emitting answer to', answer, clientId);
+        socket.emit('answer', answer, clientId);
+
+        UI_AddPeer(clientId);
+    });
+
+    socket.on('answer', async (answer, clientId) => {
+        console.log('event answer', answer, clientId);
+
+        const peer = peers[clientId];
+        await peer.setRemoteDescription(new RTCSessionDescription(answer));
+
+        UI_AddPeer(clientId);
+    });
+
+    socket.on('ice-candidate', (candidate, clientId) => {
+        console.log('event ice-candidate', candidate, clientId);
+
+        peers[clientId].addIceCandidate(new RTCIceCandidate(candidate));
+    });
+
+    socket.on('peer-disconnected', clientId => {
+        console.log('event peer-disconnected:', clientId);
+
+        if (peers[clientId]) {
+            peers[clientId].close();
+            delete peers[clientId];
+        }
+
+        UI_RemovePeer(clientId);
+    });
+
+    socket.emit('join', roomId);
+}
+
+function UI_AddPeer(clientId) {
+    if (document.getElementById(clientId)) {
+        console.log(`peer ${clientId} element already added`);
         return;
     }
-    sessionStorage.setItem('userName', myName);
 
-    // Hide popup and show video call UI
-    namePopupOverlay.style.display = 'none';
-    videosContainer.style.display = 'flex';
-
-    // Set local user's name tag
-    document.querySelector('#localVideo + .name-tag').textContent = myName + " (You)";
-
-    // Start the WebRTC call logic
-    startCall();
-});
-
-
-// --- WebRTC Logic ---
-
-function startCall() {
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-    .then(stream => {
-        localStream = stream;
-        const myVideo = document.getElementById('localVideo');
-        addVideoStream(myVideo.parentElement, myVideo, stream);
-        updateVideoLayout(); // Initial layout update
-
-        socket.emit('join-room', ROOM_ID, socket.id, myName);
-
-        socket.on('user-connected', (userId, name) => {
-            console.log('User connected:', userId, name);
-            connectToNewUser(userId, name, stream);
-        });
-
-        socket.on('offer', (offer, userId, name) => {
-            console.log('Receiving offer from', name);
-            const peer = createPeer(userId, name, stream);
-            peer.setRemoteDescription(new RTCSessionDescription(offer))
-                .then(() => peer.createAnswer())
-                .then(answer => {
-                    peer.setLocalDescription(answer);
-                    socket.emit('answer', answer, userId);
-                });
-        });
-
-        socket.on('answer', (answer, userId) => {
-            console.log('Receiving answer from', userId);
-            peers[userId].peer.setRemoteDescription(new RTCSessionDescription(answer));
-        });
-
-        socket.on('ice-candidate', (candidate, userId) => {
-            peers[userId].peer.addIceCandidate(new RTCIceCandidate(candidate));
-        });
-
-    }).catch(err => {
-        console.error("Failed to get local stream", err);
-        alert("Could not access camera and microphone.");
-    });
-
-    socket.on('user-disconnected', userId => {
-        console.log('User disconnected:', userId);
-        if (peers[userId]) {
-            peers[userId].peer.close();
-            peers[userId].wrapper.remove();
-            delete peers[userId];
-            updateVideoLayout(); // Update layout on disconnect
-        }
-    });
-}
-
-function connectToNewUser(userId, name, stream) {
-    const peer = createPeer(userId, name, stream);
-    peer.createOffer().then(offer => {
-        peer.setLocalDescription(offer);
-        console.log('Sending offer to', name);
-        socket.emit('offer', offer, userId);
-    });
-}
-
-function createPeer(userId, name, stream) {
-    const peer = new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-    });
-
-    stream.getTracks().forEach(track => {
-        peer.addTrack(track, stream);
-    });
-
-    const videoWrapper = document.createElement('div');
-    videoWrapper.className = 'video-wrapper';
+    const wrapper = document.createElement('div');
+    wrapper.id = clientId;
+    wrapper.className = 'video-wrapper';
     const video = document.createElement('video');
-    const nameTag = document.createElement('span');
-    nameTag.className = 'name-tag';
-    nameTag.textContent = name;
-    videoWrapper.appendChild(video);
-    videoWrapper.appendChild(nameTag);
+    wrapper.appendChild(video);
 
-    peer.ontrack = event => {
-        addVideoStream(videoWrapper, video, event.streams[0]);
-        updateVideoLayout(); // Update layout when remote stream is added
-    };
-
-    peer.onicecandidate = event => {
-        if (event.candidate) {
-            socket.emit('ice-candidate', event.candidate, userId);
-        }
-    };
-
-    peers[userId] = { peer, wrapper: videoWrapper };
-    return peer;
-}
-
-function addVideoStream(wrapper, video, stream) {
-    video.srcObject = stream;
-    video.addEventListener('loadedmetadata', () => {
-        video.play();
-    });
     videoGrid.append(wrapper);
+
+    peers[clientId].ontrack = event => {
+        console.log('event peer ontrack:', event);
+
+        video.srcObject = event.streams[0];
+        video.addEventListener('loadedmetadata', () => {
+            video.play();
+        });
+    };
 }
 
-function updateVideoLayout() {
-    const participantCount = document.querySelectorAll('.video-wrapper').length;
-    let columns = Math.ceil(Math.sqrt(participantCount));
-    let rows = Math.ceil(participantCount / columns);
-
-    // Optimize for common cases
-    if (participantCount === 2) {
-        columns = 2;
-        rows = 1;
-    } else if (participantCount === 3 || participantCount === 4) {
-        columns = 2;
-        rows = 2;
-    } else if (participantCount > 4 && participantCount <= 6) {
-        columns = 3;
-        rows = 2;
-    } else if (participantCount > 6 && participantCount <= 9) {
-        columns = 3;
-        rows = 3;
+function UI_RemovePeer(clientId) {
+    if (peers[clientId]) {
+        peers[clientId].ontrack = null;
     }
 
+    const el = document.getElementById(clientId);
+    if (!el) {
+        console.log(`peer ${clientId} element not found`);
+        return;
+    }
+    el.remove();
+}
 
-    const videoWrappers = document.querySelectorAll('.video-wrapper');
-    videoWrappers.forEach(wrapper => {
-        wrapper.style.width = `calc(${100 / columns}% - 15px)`;
-        wrapper.style.height = `calc(${100 / rows}% - 15px)`;
+function createPeer(clientId) {
+    const peer = new RTCPeerConnection({
+        iceServers: [
+            { urls: "stun:localhost:3478" },
+            // { urls: "stun:stun.l.google.com:19302" }
+        ]
     });
+
+    peer.onicecandidate = event => {
+        console.log('event peer onicecandidate:', event);
+
+        if (event.candidate) {
+            socket.emit('ice-candidate', event.candidate, clientId);
+        }
+    };
+
+    peers[clientId] = peer;
+    return peer;
 }
