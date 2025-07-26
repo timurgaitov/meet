@@ -189,7 +189,7 @@ async function main() {
         let avg = sum / dataArray.length;
         console.log('Average volume:', avg);
 
-        const scale = 1 + (avg / 256) * 2;
+        const scale = 1 + (avg / 256) * 7;
         const opacity = avg / 256;
 
         wave.style.transform = `scale(${scale})`;
