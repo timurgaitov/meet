@@ -7,20 +7,18 @@ services:
       - ./server:/usr/src/app
       - /usr/src/app/node_modules
     command: ./node_modules/.bin/nodemon server.js
-  client:
-    build: ./client
+  rp:
+    build: ./rp
     ports:
-      - "8080:80"
-    volumes:
-      - ./client:/usr/share/nginx/html
+      - "80:80"
     depends_on:
       - server
-  stun:
-    image: coturn/coturn
-    ports:
-      - "3478:3478/udp" # STUN port
-      - "3478:3478/tcp"
-    volumes:
-      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
-    command:
-      --log-file=stdout
+  # stun:
+  #   image: coturn/coturn
+  #   ports:
+  #     - "3478:3478/udp" # STUN port
+  #     - "3478:3478/tcp"
+  #   volumes:
+  #     - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+  #   command:
+  #     --log-file=stdout
